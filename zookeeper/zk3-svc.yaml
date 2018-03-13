@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zk3-data
+  annotations:
+    volume.beta.kubernetes.io/storage-class: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zk3-datalog
+  annotations:
+    volume.beta.kubernetes.io/storage-class: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kafka-zk3
+  labels:
+    node: kafka-zk3
+    cluster: kafka-zk
+spec:
+  containers:
+    - image: library/zookeeper
+      name: zookeeper
+      ports:
+        - containerPort: 2181
+          name: client
+        - containerPort: 2888
+          name: server
+        - containerPort: 3888
+          name: election-leader
+      env:
+        - name: ZOO_MY_ID
+          value: "3"
+        - name: ZOO_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: kafka-zookeeper-config
+              key: zoo.servers
+      volumeMounts:
+        - name: data
+          mountPath: /data
+        - name: datalog
+          mountPath: /datalog
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: zk3-data
+    - name: datalog
+      persistentVolumeClaim:
+        claimName: zk3-datalog
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-zk3
+spec:
+  selector:
+    node: kafka-zk3
+  clusterIP: None
+  ports:
+    - port: 2181
+      name: client
+    - port: 2888
+      name: server
+    - port: 3888
+      name: election-leader
