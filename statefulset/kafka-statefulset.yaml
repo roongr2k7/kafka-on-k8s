@@ -2,42 +2,37 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: kafka-zk-hs
+  name: kafka-hs
   labels:
-    app: kafka-zk
+    app: kafka
 spec:
   ports:
-  - port: 2181
-    name: client
-  - port: 2888
+  - port: 9092
     name: server
-  - port: 3888
-    name: leader-election
   clusterIP: None
   selector:
-    app: kafka-zk
+    app: kafka
 ---
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
-  name: kafka-zk-pdb
+  name: kafka-pdb
 spec:
   selector:
     matchLabels:
-      app: kafka-zk
+      app: kafka
   # maxUnavailable calculate from `replicas`
   maxUnavailable: 1
 ---
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
-  name: kafka-zk
+  name: kafka
 spec:
   selector:
     matchLabels:
-      app: kafka-zk
-  serviceName: kafka-zk-hs
-  # need to change `NODE_COUNT` in `zk-configmap.yaml` to equal number of replicas
+      app: kafka
+  serviceName: kafka-hs
   replicas: 3
   updateStrategy:
     type: RollingUpdate
@@ -45,7 +40,7 @@ spec:
   template:
     metadata:
       labels:
-        app: kafka-zk
+        app: kafka
     spec:
       affinity:
         podAntiAffinity:
@@ -55,42 +50,42 @@ spec:
                   - key: "app"
                     operator: In
                     values:
-                    - kafka-zk
+                    - kafka
               topologyKey: "kubernetes.io/hostname"
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: "app"
+                      operator: In
+                      values:
+                      - kafka-zk
+                topologyKey: "kubernetes.io/hostname"
       containers:
-      - name: kubernetes-zookeeper
-        image: "zookeeper"
+      - name: kubernetes-kafka
+        image: "wurstmeister/kafka:0.10.1.1"
         resources:
           requests:
             memory: "1.0Gi"
-            cpu: "0.1"
+            cpu: 100m
         ports:
-        - containerPort: 2181
-          name: client
-        - containerPort: 2888
+        - containerPort: 9092
           name: server
-        - containerPort: 3888
-          name: leader-election
+        env:
+          - name: KAFKA_LOG_DIRS
+            value: /kafka/data
+          - name: KAFKA_ADVERTISED_PORT
+            value: "9092"
+          - name: ZOOKEEPER_SERVICE
+            value: kafka-zk-hs
         command:
         - bash
-        - /tmp/script/start-zk.sh
-        readinessProbe:
-          exec:
-            command:
-            - bash
-            - /tmp/script/readiness-check.sh
-          initialDelaySeconds: 10
-          timeoutSeconds: 5
-        livenessProbe:
-          exec:
-            command:
-            - bash
-            - /tmp/script/liveness-check.sh
-          initialDelaySeconds: 10
-          timeoutSeconds: 5
+        - /tmp/script/start-kafka.sh
         volumeMounts:
-        - name: datadir
-          mountPath: /var/lib/zookeeper
+        - name: logs
+          mountPath: /kafka
         - name: start-script
           mountPath: /tmp/script
       securityContext:
@@ -99,10 +94,10 @@ spec:
       volumes:
       - name: start-script
         configMap:
-          name: zk-script-configmap
+          name: kafka-script-configmap
   volumeClaimTemplates:
   - metadata:
-      name: datadir
+      name: logs
     spec:
       accessModes: [ "ReadWriteOnce" ]
       resources:
