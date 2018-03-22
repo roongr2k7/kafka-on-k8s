@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: script-configmap
+  name: zk-script-configmap
 data:
   start-zk.sh: |
     HOST=`hostname -s`

@@ -2,52 +2,41 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: zk-hs
+  name: kafka-zk-hs
   labels:
-    app: zk
+    app: kafka-zk
 spec:
   ports:
+  - port: 2181
+    name: client
   - port: 2888
     name: server
   - port: 3888
     name: leader-election
   clusterIP: None
   selector:
-    app: zk
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: zk-cs
-  labels:
-    app: zk
-spec:
-  ports:
-  - port: 2181
-    name: client
-  selector:
-    app: zk
+    app: kafka-zk
 ---
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
-  name: zk-pdb
+  name: kafka-zk-pdb
 spec:
   selector:
     matchLabels:
-      app: zk
+      app: kafka-zk
   # maxUnavailable calculate from `replicas`
   maxUnavailable: 1
 ---
 apiVersion: apps/v1beta1
 kind: StatefulSet
 metadata:
-  name: zk
+  name: kafka-zk
 spec:
   selector:
     matchLabels:
-      app: zk
-  serviceName: zk-hs
+      app: kafka-zk
+  serviceName: kafka-zk-hs
   # need to change `NODE_COUNT` in `zk-configmap.yaml` to equal number of replicas
   replicas: 3
   updateStrategy:
@@ -56,7 +45,7 @@ spec:
   template:
     metadata:
       labels:
-        app: zk
+        app: kafka-zk
     spec:
       affinity:
         podAntiAffinity:
@@ -66,7 +55,7 @@ spec:
                   - key: "app"
                     operator: In
                     values:
-                    - zk
+                    - kafka-zk
               topologyKey: "kubernetes.io/hostname"
       containers:
       - name: kubernetes-zookeeper
@@ -74,7 +63,7 @@ spec:
         resources:
           requests:
             memory: "1.0Gi"
-            cpu: "0.3"
+            cpu: "0.1"
         ports:
         - containerPort: 2181
           name: client
@@ -110,7 +99,7 @@ spec:
       volumes:
       - name: start-script
         configMap:
-          name: script-configmap
+          name: zk-script-configmap
   volumeClaimTemplates:
   - metadata:
       name: datadir
